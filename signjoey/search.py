@@ -378,6 +378,7 @@ def beam_search(
             : topk_beam_index.size(0)
         ].unsqueeze(1)
         select_indices = batch_index.view(-1)
+        select_indices = select_indices.long()
 
         # append latest prediction
         alive_seq = torch.cat(
@@ -433,6 +434,7 @@ def beam_search(
 
         # reorder indices, outputs and masks
         select_indices = batch_index.view(-1)
+        select_indices = select_indices.long()
         encoder_output = encoder_output.index_select(0, select_indices)
         if encoder_output2 is not None:
             encoder_output2 = encoder_output2.index_select(0, select_indices)
