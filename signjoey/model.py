@@ -8,6 +8,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 
+import datetime
+
 from itertools import groupby
 from signjoey.initialization import initialize_model
 from signjoey.embeddings import Embeddings, SpatialEmbeddings
@@ -129,6 +131,10 @@ class SignModel(nn.Module):
         )
         query_output = None
         query_mask = None
+
+        nw = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        torch.save(encoder_output, f'{self.name_to_video_id}_encoder_output_{nw}.pt')
+        torch.save(encoder_hidden, f'{self.name_to_video_id}_encoder_hidden_{nw}.pt')
 
         if self.query_embedding is not None:
             if self.gloss_rate < 0:
