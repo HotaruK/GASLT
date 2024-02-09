@@ -38,16 +38,16 @@ class RecurrentEncoder(Encoder):
 
     # pylint: disable=unused-argument
     def __init__(
-        self,
-        rnn_type: str = "gru",
-        hidden_size: int = 1,
-        emb_size: int = 1,
-        num_layers: int = 1,
-        dropout: float = 0.0,
-        emb_dropout: float = 0.0,
-        bidirectional: bool = True,
-        freeze: bool = False,
-        **kwargs
+            self,
+            rnn_type: str = "gru",
+            hidden_size: int = 1,
+            emb_size: int = 1,
+            num_layers: int = 1,
+            dropout: float = 0.0,
+            emb_dropout: float = 0.0,
+            bidirectional: bool = True,
+            freeze: bool = False,
+            **kwargs
     ) -> None:
         """
         Create a new recurrent encoder.
@@ -87,7 +87,7 @@ class RecurrentEncoder(Encoder):
 
     # pylint: disable=invalid-name, unused-argument
     def _check_shapes_input_forward(
-        self, embed_src: Tensor, src_length: Tensor, mask: Tensor
+            self, embed_src: Tensor, src_length: Tensor, mask: Tensor
     ) -> None:
         """
         Make sure the shape of the inputs to `self.forward` are correct.
@@ -104,7 +104,7 @@ class RecurrentEncoder(Encoder):
 
     # pylint: disable=arguments-differ
     def forward(
-        self, embed_src: Tensor, src_length: Tensor, mask: Tensor
+            self, embed_src: Tensor, src_length: Tensor, mask: Tensor
     ) -> (Tensor, Tensor):
         """
         Applies a bidirectional RNN to sequence of embeddings x.
@@ -172,15 +172,15 @@ class TransformerEncoder(Encoder):
 
     # pylint: disable=unused-argument
     def __init__(
-        self,
-        hidden_size: int = 512,
-        ff_size: int = 2048,
-        num_layers: int = 8,
-        num_heads: int = 4,
-        dropout: float = 0.1,
-        emb_dropout: float = 0.1,
-        freeze: bool = False,
-        **kwargs
+            self,
+            hidden_size: int = 512,
+            ff_size: int = 2048,
+            num_layers: int = 8,
+            num_heads: int = 4,
+            dropout: float = 0.1,
+            emb_dropout: float = 0.1,
+            freeze: bool = False,
+            **kwargs
     ):
         """
         Initializes the Transformer.
@@ -219,7 +219,7 @@ class TransformerEncoder(Encoder):
 
     # pylint: disable=arguments-differ
     def forward(
-        self, embed_src: Tensor, src_length: Tensor, mask: Tensor
+            self, embed_src: Tensor, src_length: Tensor, mask: Tensor
     ) -> (Tensor, Tensor):
         """
         Pass the input (and mask) through each layer in turn.
@@ -261,19 +261,19 @@ class DeformableTransformerEncoder(Encoder):
 
     # pylint: disable=unused-argument
     def __init__(
-        self,
-        query_type: str,
-        query_nb: int,
-        num_keys: list,
-        attentions_type: str = "weighted_local_global",
-        hidden_size: int = 512,
-        ff_size: int = 2048,
-        num_layers: int = 8,
-        num_heads: int = 4,
-        dropout: float = 0.1,
-        emb_dropout: float = 0.1,
-        freeze: bool = False,
-        **kwargs
+            self,
+            query_type: str,
+            query_nb: int,
+            num_keys: list,
+            attentions_type: str = "weighted_local_global",
+            hidden_size: int = 512,
+            ff_size: int = 2048,
+            num_layers: int = 8,
+            num_heads: int = 4,
+            dropout: float = 0.1,
+            emb_dropout: float = 0.1,
+            freeze: bool = False,
+            **kwargs
     ):
         """
         Initializes the Transformer.
@@ -317,7 +317,7 @@ class DeformableTransformerEncoder(Encoder):
 
     # pylint: disable=arguments-differ
     def forward(
-        self, embed_src: Tensor, src_length: Tensor, mask: Tensor
+            self, embed_src: Tensor, src_length: Tensor, mask: Tensor
     ) -> (Tensor, Tensor):
         """
         Pass the input (and mask) through each layer in turn.
@@ -352,6 +352,52 @@ class DeformableTransformerEncoder(Encoder):
         )
 
 
+class MultiModalDeformableTransformerEncoder(DeformableTransformerEncoder):
+    def __init__(self, landmark_dim, rgb_weight=0.6, landmark_weight=0.4, *args, **kwargs):
+        assert rgb_weight + landmark_weight == 1.0, "Total weights must equal 1.0."
+        self.rgb_weight = rgb_weight  # weights for rgb video data
+        self.landmark_weight = landmark_weight  # weights for landmark data
+        super().__init__(*args, **kwargs)
+        self.pose_transform = nn.Linear(landmark_dim, self._output_size)
+
+    def forward(
+            self, embed_src_rgb: Tensor, embed_src_landmark: Tensor, src_length: Tensor, mask: Tensor
+    ) -> (Tensor, Tensor):
+        """
+        Pass the input (and mask) through each layer in turn.
+        Applies a Transformer encoder to sequence of embeddings x.
+        The input mini-batch x needs to be sorted by src length.
+        x and mask should have the same dimensions [batch, time, dim].
+
+        :param embed_src_rgb: embedded src inputs,
+            shape (batch_size, src_len, embed_size)
+        :param embed_src_landmark: pose estimation data from Mediapipe,
+            shape (batch_size, src_len, embed_size)
+        :param src_length: length of src inputs
+            (counting tokens before padding), shape (batch_size)
+        :param mask: indicates padding areas (zeros where padding), shape
+            (batch_size, src_len, embed_size)
+        :return:
+            - output: hidden states with
+                shape (batch_size, max_length, directions*hidden),
+            - hidden_concat: last hidden state with
+                shape (batch_size, directions*hidden)
+        """
+        # Transform pose data to the same dimension as the source embeddings
+        embed_src_landmark = self.pose_transform(embed_src_landmark)
+
+        x_rgb = self.pe(embed_src_rgb)  # add position encoding to word embeddings
+        x_rgb = self.emb_dropout(x_rgb)
+        x_landmark = self.pe(embed_src_landmark)  # add position encoding to word embeddings
+        x_landmark = self.emb_dropout(x_landmark)
+
+        x = self.rgb_weight * x_rgb + self.landmark_weight * x_landmark
+
+        for layer in self.layers:
+            x = layer(x, mask)
+        return self.layer_norm(x), None
+
+
 class QueryTransformerEncoder(nn.Module):
     """
     A transformer decoder with N masked layers.
@@ -359,15 +405,15 @@ class QueryTransformerEncoder(nn.Module):
     """
 
     def __init__(
-        self,
-        num_layers: int = 4,
-        num_heads: int = 8,
-        hidden_size: int = 512,
-        ff_size: int = 2048,
-        dropout: float = 0.1,
-        emb_dropout: float = 0.1,
-        freeze: bool = False,
-        **kwargs
+            self,
+            num_layers: int = 4,
+            num_heads: int = 8,
+            hidden_size: int = 512,
+            ff_size: int = 2048,
+            dropout: float = 0.1,
+            emb_dropout: float = 0.1,
+            freeze: bool = False,
+            **kwargs
     ):
         """
         Initialize a Transformer decoder.
@@ -408,11 +454,11 @@ class QueryTransformerEncoder(nn.Module):
             freeze_params(self)
 
     def forward(
-        self,
-        trg_embed: Tensor = None,
-        encoder_output: Tensor = None,
-        src_mask: Tensor = None,
-        **kwargs
+            self,
+            trg_embed: Tensor = None,
+            encoder_output: Tensor = None,
+            src_mask: Tensor = None,
+            **kwargs
     ):
         """
         Transformer decoder forward pass.

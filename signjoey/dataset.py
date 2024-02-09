@@ -47,6 +47,7 @@ class SignTranslationDataset(data.Dataset):
                 ("sgn", fields[2]),
                 ("gls", fields[3]),
                 ("txt", fields[4]),
+                ("landmark", fields[5]),
             ]
 
         if not isinstance(path, list):
@@ -72,6 +73,7 @@ class SignTranslationDataset(data.Dataset):
                         "gloss": s["gloss"],
                         "text": s["text"],
                         "sign": s["sign"],
+                        "landmark": s["landmark"],
                     }
 
         examples = []
@@ -86,6 +88,7 @@ class SignTranslationDataset(data.Dataset):
                         sample["sign"] + 1e-8,
                         sample["gloss"].strip(),
                         sample["text"].strip(),
+                        sample["landmark"] + 1e-8,
                     ],
                     fields,
                 )

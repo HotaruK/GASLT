@@ -17,6 +17,7 @@ from signjoey.encoders import (
     TransformerEncoder,
     DeformableTransformerEncoder,
     QueryTransformerEncoder,
+    MultiModalDeformableTransformerEncoder,
 )
 from signjoey.decoders import (
     Decoder,
@@ -513,6 +514,17 @@ def build_model(
         ), "for transformer, emb_size must be hidden_size"
 
         encoder = DeformableTransformerEncoder(
+            **cfg["encoder"],
+            emb_size=sgn_embed.embedding_dim,
+            emb_dropout=enc_emb_dropout,
+        )
+    elif cfg["encoder"].get("type", "recurrent") == "multimodal_deformable_transformer":
+        assert (
+            cfg["encoder"]["embeddings"]["embedding_dim"]
+            == cfg["encoder"]["hidden_size"]
+        ), "for transformer, emb_size must be hidden_size"
+
+        encoder = MultiModalDeformableTransformerEncoder(
             **cfg["encoder"],
             emb_size=sgn_embed.embedding_dim,
             emb_dropout=enc_emb_dropout,

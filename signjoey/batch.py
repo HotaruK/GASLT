@@ -21,6 +21,7 @@ class Batch:
         random_frame_subsampling: bool = None,
         random_frame_masking_ratio: float = None,
     ):
+        # todo: need to deal with landmark data
         """
         Create a new joey batch from a torch batch.
         This batch extends torch text's batch attributes with sgn (sign),

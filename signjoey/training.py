@@ -468,6 +468,7 @@ class TrainManager:
                     #   these recognition only and translation only parameters!
                     #   Maybe have a NamedTuple with optional fields?
                     #   Hmm... Future Cihan's problem.
+                    # todo: landmark
                     val_res = validate_on_data(
                         model=self.model,
                         data=valid_data,
@@ -748,6 +749,7 @@ class TrainManager:
         :return normalized_recognition_loss: Normalized recognition loss
         :return normalized_translation_loss: Normalized translation loss
         """
+        # todo: considering landmark data
 
         recognition_loss, translation_loss, sim_loss = self.model.get_loss_for_batch(
             batch=batch,

@@ -98,7 +98,7 @@ model:
     sim_loss_weight: 10
     sentence_embedding_mod: mean
     encoder:
-        type: deformable_transformer
+        type: multimodal_deformable_transformer
         attentions_type: local
         num_layers: 2
         num_heads: 8
@@ -117,6 +117,9 @@ model:
         dropout: 0.5
         query_nb: 3
         query_type: not
+        rgb_weight: 0.6
+        landmark_weight: 0.4
+        landmark_dim: 111
     decoder:
         type: transformer
         num_layers: 2
