@@ -144,7 +144,11 @@ class Batch:
         self.signer = [self.signer[pi] for pi in perm_index]
         self.sequence = [self.sequence[pi] for pi in perm_index]
 
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        perm_index = perm_index.to(device)
         if self.gls is not None:
+            self.gls = self.gls.to(device)
+            self.gls_lengths = self.gls_lengths.to(device)
             self.gls = self.gls[perm_index]
             self.gls_lengths = self.gls_lengths[perm_index]
 
@@ -152,6 +156,8 @@ class Batch:
             self.txt = self.txt[perm_index]
             self.txt_mask = self.txt_mask[perm_index]
             self.txt_input = self.txt_input[perm_index]
+
+            self.txt_lengths = self.txt_lengths.to(device)
             self.txt_lengths = self.txt_lengths[perm_index]
 
         if self.use_cuda:
