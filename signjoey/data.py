@@ -120,9 +120,24 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
         include_lengths=True,
     )
 
+    def stack_features_lm(features, something):
+        return torch.stack([torch.stack(ft, dim=0) for ft in features], dim=0)
+
+    landmark_field = data.Field(
+        use_vocab=False,
+        init_token=None,
+        dtype=torch.float32,
+        preprocessing=lambda x: x,
+        tokenize=lambda features: features,  # TODO (Cihan): is this necessary?
+        batch_first=True,
+        include_lengths=True,
+        postprocessing=stack_features_lm,
+        pad_token=torch.zeros((184,)),
+    )
+
     train_data = SignTranslationDataset(
         path=train_paths,
-        fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field),
+        fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field, landmark_field),
         filter_pred=lambda x: len(vars(x)["sgn"]) <= max_sent_length
         and len(vars(x)["txt"]) <= max_sent_length,
     )
@@ -160,7 +175,7 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
 
     dev_data = SignTranslationDataset(
         path=dev_paths,
-        fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field),
+        fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field, landmark_field),
     )
     random_dev_subset = data_cfg.get("random_dev_subset", -1)
     if random_dev_subset > -1:
@@ -174,7 +189,7 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
     # check if target exists
     test_data = SignTranslationDataset(
         path=test_paths,
-        fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field),
+        fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field, landmark_field),
     )
 
     gls_field.vocab = gls_vocab

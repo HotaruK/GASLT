@@ -113,6 +113,7 @@ class SignModel(nn.Module):
         sgn_mask: Tensor,
         sgn_lengths: Tensor,
         txt_input: Tensor,
+        landmarks: Tensor,
         txt_mask: Tensor = None,
     ) -> (Tensor, Tensor, Tensor, Tensor):
         """
@@ -123,6 +124,7 @@ class SignModel(nn.Module):
         :param sgn_mask: source mask
         :param sgn_lengths: length of source inputs
         :param txt_input: target input
+        :param landmarks: landmark data
         :param txt_mask: target mask
         :return: decoder outputs
         """
@@ -132,9 +134,11 @@ class SignModel(nn.Module):
         query_output = None
         query_mask = None
 
-        nw = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        torch.save(encoder_output, f'{self.name_to_video_id}_encoder_output_{nw}.pt')
-        torch.save(encoder_hidden, f'{self.name_to_video_id}_encoder_hidden_{nw}.pt')
+        # combine encoder_output and pose estimation landmark data
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        encoder_output = encoder_output.to(device)
+        expanded_aux_data = landmarks.to(device)
+        encoder_output = torch.cat((encoder_output, expanded_aux_data), dim=2)
 
         if self.query_embedding is not None:
             if self.gloss_rate < 0:
@@ -267,6 +271,7 @@ class SignModel(nn.Module):
             sgn_lengths=batch.sgn_lengths,
             txt_input=batch.txt_input,
             txt_mask=batch.txt_mask,
+            landmarks=batch.landmarks[0],
         )
 
         # Compute sim loss
@@ -358,6 +363,12 @@ class SignModel(nn.Module):
             sgn_length=batch.sgn_lengths,
             encoder=self.encoder,
         )
+        # combine pose estimation data
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        encoder_output = encoder_output.to(device)
+        expanded_aux_data = batch.landmarks[0].to(device)
+        encoder_output = torch.cat((encoder_output, expanded_aux_data), dim=2)
+
         query_output = None
         query_mask = None
         if self.query_embedding is not None:

@@ -41,6 +41,8 @@ class Batch:
         # Sign
         self.sgn, self.sgn_lengths = torch_batch.sgn
 
+        # pose estimate landmarks
+        self.landmarks = torch_batch.landmarks
         # Here be dragons
         if frame_subsampling_ratio:
             tmp_sgn = torch.zeros_like(self.sgn)
