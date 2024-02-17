@@ -42,6 +42,7 @@ from torchtext.vocab import Vectors
 from pathlib import Path
 import json
 import pickle
+from torch.nn.utils.rnn import pad_sequence
 
 
 
@@ -271,7 +272,7 @@ class SignModel(nn.Module):
             sgn_lengths=batch.sgn_lengths,
             txt_input=batch.txt_input,
             txt_mask=batch.txt_mask,
-            landmarks=batch.landmarks[0],
+            landmarks=pad_sequence(batch.landmarks, batch_first=True).float(),
         )
 
         # Compute sim loss
@@ -366,7 +367,7 @@ class SignModel(nn.Module):
         # combine pose estimation data
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         encoder_output = encoder_output.to(device)
-        expanded_aux_data = batch.landmarks[0].to(device)
+        expanded_aux_data = pad_sequence(batch.landmarks, batch_first=True).float().to(device)
         encoder_output = torch.cat((encoder_output, expanded_aux_data), dim=2)
 
         query_output = None

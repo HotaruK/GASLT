@@ -27,7 +27,7 @@ class SignTranslationDataset(data.Dataset):
     def __init__(
         self,
         path: str,
-        fields: Tuple[RawField, RawField, Field, Field, Field, Field],
+        fields: Tuple[RawField, RawField, Field, Field, Field, RawField],
         **kwargs
     ):
         """Create a SignTranslationDataset given paths and fields.

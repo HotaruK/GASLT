@@ -123,17 +123,7 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
     def stack_features_lm(features, something):
         return torch.stack([torch.stack(ft, dim=0) for ft in features], dim=0)
 
-    landmark_field = data.Field(
-        use_vocab=False,
-        init_token=None,
-        dtype=torch.float32,
-        preprocessing=lambda x: x,
-        tokenize=lambda features: features,  # TODO (Cihan): is this necessary?
-        batch_first=True,
-        include_lengths=True,
-        postprocessing=stack_features_lm,
-        pad_token=torch.zeros((184,)),
-    )
+    landmark_field = data.RawField(preprocessing=lambda x: x)
 
     train_data = SignTranslationDataset(
         path=train_paths,
