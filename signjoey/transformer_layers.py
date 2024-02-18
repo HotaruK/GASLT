@@ -52,6 +52,16 @@ class MultiHeadedAttention(nn.Module):
         num_heads = self.num_heads
 
         # project the queries (q), keys (k), and values (v)
+        def make_weight(a: Tensor):
+            weight = torch.ones_like(a)
+            weight[:, :512, :] *= 0.3
+            weight[:, 513:, :] *= 0.7
+            return weight
+
+        k = k * make_weight(k)
+        v = v * make_weight(v)
+        q = q * make_weight(q)
+
         k = self.k_layer(k)
         v = self.v_layer(v)
         q = self.q_layer(q)
