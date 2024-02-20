@@ -43,6 +43,7 @@ from pathlib import Path
 import json
 import pickle
 from torch.nn.utils.rnn import pad_sequence
+from signjoey.landmark_lstm import LandmarkLSTMModel
 
 
 
@@ -58,6 +59,7 @@ class SignModel(nn.Module):
         query_embedding: nn.Embedding,
         gloss_output_layer: nn.Module,
         decoder: Decoder,
+        landmark_encoder: nn.Module,
         sgn_embed: SpatialEmbeddings,
         txt_embed: Embeddings,
         gls_vocab: GlossVocabulary,
@@ -88,6 +90,7 @@ class SignModel(nn.Module):
         self.encoder = encoder
         self.query_encoder = query_encoder
         self.decoder = decoder
+        self.landmark_encoder = landmark_encoder
 
         self.query_embedding = query_embedding
         self.sgn_embed = sgn_embed
@@ -137,9 +140,11 @@ class SignModel(nn.Module):
 
         # combine encoder_output and pose estimation landmark data
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        landmarks = landmarks.to(device)
+        landmark_aux_data = self.landmark_encoder(landmarks)
         encoder_output = encoder_output.to(device)
-        expanded_aux_data = landmarks.to(device)
-        encoder_output = torch.cat((encoder_output, expanded_aux_data), dim=2)
+        landmark_aux_data = landmark_aux_data.to(device)
+        encoder_output = torch.cat((encoder_output, landmark_aux_data), dim=2)
 
         if self.query_embedding is not None:
             if self.gloss_rate < 0:
@@ -367,8 +372,8 @@ class SignModel(nn.Module):
         # combine pose estimation data
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         encoder_output = encoder_output.to(device)
-        expanded_aux_data = pad_sequence(batch.landmarks, batch_first=True).float().to(device)
-        encoder_output = torch.cat((encoder_output, expanded_aux_data), dim=2)
+        landmarks_aux_data = self.landmark_encoder(pad_sequence(batch.landmarks, batch_first=True).float().to(device)).to(device)
+        encoder_output = torch.cat((encoder_output, landmarks_aux_data), dim=2)
 
         query_output = None
         query_mask = None
@@ -613,6 +618,9 @@ def build_model(
     sim_name_to_video_id_json = cfg.get("sim_name_to_video_id_json", "")
     sim_video_cos_sim = cfg.get("sim_video_cos_sim", "")
     assert sim_name_to_video_id_json != "" and sim_video_cos_sim != "", "sim_name_to_video_id_json and sim_video_cos_sim must be set"
+
+    # build landmark encoder
+    lm_model = LandmarkLSTMModel(**cfg["landmark_encoder"])
     
     name_to_video_id = json.load(
         open(sim_name_to_video_id_json)
@@ -637,7 +645,8 @@ def build_model(
         sim_loss_weight=cfg.get("sim_loss_weight", 0.0),
         sentence_embedding_mod=cfg.get("sentence_embedding_mod", "mean"),
         name_to_video_id=name_to_video_id,
-        video_cos_sim=video_cos_sim
+        video_cos_sim=video_cos_sim,
+        landmark_encoder=lm_model,
     )
 
     if do_translation:
