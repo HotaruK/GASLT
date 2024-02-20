@@ -267,6 +267,8 @@ class TrainManager:
             "scheduler_state": self.scheduler.state_dict()
             if self.scheduler is not None
             else None,
+            "landmark_lstm_state": self.model.landmark_encoder.state_dict(),
+            "landmark_lstm_optimizer_state": self.model.landmark_encoder.optimizer.state_dict(),
         }
         torch.save(state, model_path)
         if self.ckpt_queue.full():
@@ -312,9 +314,12 @@ class TrainManager:
 
         # restore model and optimizer parameters
         self.model.load_state_dict(model_checkpoint["model_state"])
+        self.model.landmark_encoder.load_state_dict(model_checkpoint["landmark_lstm_state"])
 
         if not reset_optimizer:
             self.optimizer.load_state_dict(model_checkpoint["optimizer_state"])
+            self.model.landmark_encoder.optimizer.load_state_dict(
+                model_checkpoint["landmark_lstm_optimizer_state"])
         else:
             self.logger.info("Reset optimizer.")
 
@@ -342,6 +347,7 @@ class TrainManager:
         # move parameters to cuda
         if self.use_cuda:
             self.model.cuda()
+            self.model.landmark_encoder.cuda()
 
     def train_and_validate(self, train_data: Dataset, valid_data: Dataset) -> None:
         """
@@ -365,6 +371,7 @@ class TrainManager:
                 self.scheduler.step(epoch=epoch_no)
 
             self.model.train()
+            self.model.landmark_encoder.train()
             start = time.time()
             total_valid_duration = 0
             count = self.batch_multiplier - 1
@@ -396,6 +403,7 @@ class TrainManager:
                 # memory-6794e10db672
                 update = count == 0
 
+                self.model.landmark_encoder.optimizer.zero_grad()
                 recognition_loss, translation_loss, sim_loss = self._train_batch(
                     batch, update=update
                 )
@@ -424,6 +432,7 @@ class TrainManager:
                     and update
                 ):
                     self.scheduler.step()
+                    self.model.landmark_encoder.optimizer.step()
 
                 # log learning progress
                 if self.steps % self.logging_freq == 0 and update:
@@ -509,6 +518,7 @@ class TrainManager:
                         frame_subsampling_ratio=self.frame_subsampling_ratio,
                     )
                     self.model.train()
+                    self.model.landmark_encoder.train()
                     if val_res["valid_sim_loss"] > 0:
                         self.tb_writer.add_scalar(
                             "valid/valid_sim_loss",
