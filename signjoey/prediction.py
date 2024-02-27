@@ -112,6 +112,7 @@ def validate_on_data(
 
     # disable dropout
     model.eval()
+    model.landmark_encoder.eval()
     # don't track gradients during validation
     with torch.no_grad():
         all_gls_outputs = []
