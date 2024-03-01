@@ -61,6 +61,7 @@ class SignModel(nn.Module):
         txt_vocab: TextVocabulary,
         name_to_video_id,
         video_cos_sim,
+        i3d_model,
         do_recognition: bool = True,
         do_translation: bool = True,
         gloss_rate: int = 10,
@@ -103,6 +104,7 @@ class SignModel(nn.Module):
         self.gloss_rate = gloss_rate
         self.sim_loss_weight = sim_loss_weight
         self.sentence_embedding_mod = sentence_embedding_mod
+        self.i3d_model = i3d_model
 
     # pylint: disable=arguments-differ
     def forward(
@@ -124,8 +126,10 @@ class SignModel(nn.Module):
         :param txt_mask: target mask
         :return: decoder outputs
         """
+        sign = self.i3d_model(sgn)
+
         encoder_output, encoder_hidden = self.encode(
-            sgn=sgn, sgn_mask=sgn_mask, sgn_length=sgn_lengths, encoder=self.encoder
+            sgn=sign, sgn_mask=sgn_mask, sgn_length=sgn_lengths, encoder=self.encoder
         )
         query_output = None
         query_mask = None
