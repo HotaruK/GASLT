@@ -187,7 +187,8 @@ class InceptionI3d(nn.Module):
     )
 
     def __init__(self, num_classes=400, spatial_squeeze=True,
-                 final_endpoint='Logits', name='inception_i3d', in_channels=3, dropout_keep_prob=0.5):
+                 final_endpoint='Logits', name='inception_i3d', in_channels=3, dropout_keep_prob=0.5,
+                 frequency=8, input_dir='', batch_size=40):
         """Initializes I3D model instance.
         Args:
           num_classes: The number of outputs in the logit layer (default 400, which
@@ -204,6 +205,9 @@ class InceptionI3d(nn.Module):
         Raises:
           ValueError: if `final_endpoint` is not recognized.
         """
+        self.frequency = frequency
+        self.input_dir = input_dir
+        self.batch_size = batch_size
 
         if final_endpoint not in self.VALID_ENDPOINTS:
             raise ValueError('Unknown final endpoint %s' % final_endpoint)
@@ -324,12 +328,8 @@ class InceptionI3d(nn.Module):
             if end_point in self.end_points:
                 x = self._modules[end_point](x) # use _modules to work with dataparallel
 
-        x = self.logits(self.dropout(self.avg_pool(x)))
-        if self._spatial_squeeze:
-            logits = x.squeeze(3).squeeze(3)
-        # logits is batch X time X classes, which is what we want to work with
-        return logits
-        
+        return self.avg_pool(x)
+
 
     def extract_features(self, x):
         for end_point in self.VALID_ENDPOINTS:

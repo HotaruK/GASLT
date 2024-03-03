@@ -100,7 +100,7 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
         include_lengths=True,
     )
 
-    sgn_length_field = data.RawField()
+    sgn_length_field = data.RawField(preprocessing=lambda x: x)
 
     train_data = SignTranslationDataset(
         path=train_paths,

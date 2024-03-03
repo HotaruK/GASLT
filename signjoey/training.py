@@ -768,7 +768,7 @@ class TrainManager:
         # normalize translation loss
         if self.do_translation:
             if self.translation_normalization_mode == "batch":
-                txt_normalization_factor = batch.num_seqs
+                txt_normalization_factor = sum(batch.num_seqs)  # todo: max or sum?
             elif self.translation_normalization_mode == "tokens":
                 txt_normalization_factor = batch.num_txt_tokens
             else:

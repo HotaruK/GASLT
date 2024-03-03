@@ -161,7 +161,7 @@ def validate_on_data(
                 total_num_txt_tokens += batch.num_txt_tokens
             if batch_sim_loss > 0:
                 total_sim_loss += batch_sim_loss
-            total_num_seqs += batch.num_seqs
+            total_num_seqs += sum(batch.num_seqs)
 
             (
                 batch_gls_predictions,

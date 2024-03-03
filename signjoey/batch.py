@@ -91,7 +91,7 @@ class Batch:
         self.num_txt_tokens = None
         self.num_gls_tokens = None
         self.use_cuda = use_cuda
-        self.num_seqs = self.sgn.size(0)
+        self.num_seqs = self.sgn_lengths
 
         if hasattr(torch_batch, "txt"):
             txt, txt_lengths = torch_batch.txt
@@ -117,8 +117,6 @@ class Batch:
 
         :return:
         """
-        self.sgn_lengths = self.sgn_lengths.cuda()
-
         if self.txt_input is not None:
             self.txt = self.txt.cuda()
             self.txt_mask = self.txt_mask.cuda()
@@ -130,20 +128,30 @@ class Batch:
 
         :return:
         """
-        _, perm_index = self.sgn_lengths.sort(0, descending=True)
-        rev_index = [0] * perm_index.size(0)
-        for new_pos, old_pos in enumerate(perm_index.cpu().numpy()):
+        def sort_and_get_indices(lst: list):
+            """
+            Imitate the second return value of Tensor.sort()
+            :return:
+            """
+            sorted_list = sorted(enumerate(lst), key=lambda x: x[1])
+            indices = [i for i, v in sorted_list]
+
+            return indices
+
+        perm_index = sort_and_get_indices(self.sgn_lengths)
+        rev_index = [0] * len(perm_index)
+        for new_pos, old_pos in enumerate(np.array(perm_index)):
             rev_index[old_pos] = new_pos
 
-        self.sgn = self.sgn[perm_index]
-        self.sgn_mask = self.sgn_mask[perm_index]
-        self.sgn_lengths = self.sgn_lengths[perm_index]
+        # self.sgn = self.sgn[perm_index]
+        # self.sgn_mask = self.sgn_mask[perm_index]
+        self.sgn_lengths = [self.sgn_lengths[pi] for pi in perm_index]
 
         self.signer = [self.signer[pi] for pi in perm_index]
         self.sequence = [self.sequence[pi] for pi in perm_index]
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        perm_index = perm_index.to(device)
+        # perm_index = perm_index.to(device)
         if self.gls is not None:
             self.gls = self.gls.to(device)
             self.gls_lengths = self.gls_lengths.to(device)

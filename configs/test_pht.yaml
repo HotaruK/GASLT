@@ -132,3 +132,5 @@ model:
         dropout: 0.5
     i3d:
         fine_tune: true
+        frequency: 8
+        input_dir:

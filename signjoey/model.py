@@ -41,6 +41,8 @@ from pathlib import Path
 import json
 import pickle
 
+from i3d.pytorch_i3d import InceptionI3d
+from i3d.helper import get_data_by_video_name
 
 
 class SignModel(nn.Module):
@@ -109,10 +111,11 @@ class SignModel(nn.Module):
     # pylint: disable=arguments-differ
     def forward(
         self,
-        sgn: Tensor,
-        sgn_mask: Tensor,
         sgn_lengths: Tensor,
         txt_input: Tensor,
+        sgn_dim: int,
+        sequence: str,
+        use_cuda: bool,
         txt_mask: Tensor = None,
     ) -> (Tensor, Tensor, Tensor, Tensor):
         """
@@ -126,7 +129,14 @@ class SignModel(nn.Module):
         :param txt_mask: target mask
         :return: decoder outputs
         """
-        sign = self.i3d_model(sgn)
+
+        # i3d
+        sign = get_data_by_video_name(i3d=self.i3d_model, video_names=sequence)
+        sgn_mask = (sign != torch.zeros(sgn_dim))[..., 0].unsqueeze(1)
+
+        if use_cuda:
+            sign = sign.cuda()
+            sgn_mask = sgn_mask.cuda()
 
         encoder_output, encoder_hidden = self.encode(
             sgn=sign, sgn_mask=sgn_mask, sgn_length=sgn_lengths, encoder=self.encoder
@@ -182,7 +192,7 @@ class SignModel(nn.Module):
         else:
             decoder_outputs = None
 
-        return decoder_outputs, gloss_probabilities, encoder_output
+        return decoder_outputs, gloss_probabilities, encoder_output, sgn_mask
 
     def encode(
         self, sgn: Tensor, sgn_mask: Tensor, sgn_length: Tensor, encoder
@@ -259,23 +269,27 @@ class SignModel(nn.Module):
         # pylint: disable=unused-variable
 
         # Do a forward pass
-        decoder_outputs, gloss_probabilities, encoder_output = self.forward(
-            sgn=batch.sgn,
-            sgn_mask=batch.sgn_mask,
+        decoder_outputs, gloss_probabilities, encoder_output, sgn_mask = self.forward(
             sgn_lengths=batch.sgn_lengths,
             txt_input=batch.txt_input,
             txt_mask=batch.txt_mask,
+            use_cuda=batch.use_cuda,
+            sequence=batch.sequence,
+            sgn_dim=batch.sgn_dim,
         )
 
         # Compute sim loss
         if self.sim_loss_weight > 0:
-            batch_size, _, seq_len = batch.sgn_mask.shape
-            sgn_mask = ~batch.sgn_mask.reshape(batch_size, seq_len, 1)
+            batch_size, _, seq_len = sgn_mask.shape
+            sgn_mask = ~sgn_mask.reshape(batch_size, seq_len, 1)
             if self.sentence_embedding_mod == "mean":
                 # fill encoder_output with zeros
                 encoder_output = encoder_output.masked_fill(sgn_mask, 0)
                 sum_encoder_output = torch.sum(encoder_output, dim=1)
-                sentence_emb = sum_encoder_output / batch.sgn_lengths.unsqueeze(1)
+                len_tensor = torch.tensor(batch.sgn_lengths, dtype=torch.float).unsqueeze(1)
+                if batch.use_cuda:
+                    len_tensor = len_tensor.cuda()
+                sentence_emb = sum_encoder_output / len_tensor
             elif self.sentence_embedding_mod == "max":
                 encoder_output = encoder_output.masked_fill(sgn_mask, -float("inf"))
                 sentence_emb = torch.max(encoder_output, dim=1)[0]
@@ -349,10 +363,17 @@ class SignModel(nn.Module):
         :return: stacked_output: hypotheses for batch,
             stacked_attention_scores: attention scores for batch
         """
+        # i3d
+        # sign = get_data_by_video_name(i3d=self.i3d_model, video_names=batch.sequence)
+        sgn_mask = (sign != torch.zeros(batch.sgn_dim))[..., 0].unsqueeze(1)
+
+        if batch.use_cuda:
+            sign = sign.cuda()
+            sgn_mask = sgn_mask.cuda()
 
         encoder_output, encoder_hidden = self.encode(
-            sgn=batch.sgn,
-            sgn_mask=batch.sgn_mask,
+            sgn=sign,
+            sgn_mask=sgn_mask,
             sgn_length=batch.sgn_lengths,
             encoder=self.encoder,
         )
@@ -367,10 +388,10 @@ class SignModel(nn.Module):
                 query_lens < 1, query_lens.new_ones(query_lens.shape), query_lens
             )
             query_mask = get_mask_from_sequence_lengths(
-                sequence_lengths=query_lens, device=batch.sgn.device
+                sequence_lengths=query_lens, device=sign.device
             )
             query_index = (
-                torch.arange(0, query_mask.shape[1], device=batch.sgn.device)
+                torch.arange(0, query_mask.shape[1], device=sign.device)
                 .unsqueeze(0)
                 .expand(query_mask.shape)
             )
@@ -378,7 +399,7 @@ class SignModel(nn.Module):
             query_output = self.query_encoder(
                 trg_embed=query_vec,
                 encoder_output=encoder_output,
-                src_mask=batch.sgn_mask,
+                src_mask=sgn_mask,
             )
         if self.do_recognition:
             # Gloss Recognition Part
@@ -423,7 +444,7 @@ class SignModel(nn.Module):
                     encoder_hidden=encoder_hidden,
                     encoder_output=encoder_output,
                     encoder_output2=query_output,
-                    src_mask=batch.sgn_mask,
+                    src_mask=sgn_mask,
                     src_mask2=query_mask.unsqueeze(1)
                     if query_mask is not None
                     else None,
@@ -440,7 +461,7 @@ class SignModel(nn.Module):
                     encoder_hidden=encoder_hidden,
                     encoder_output=encoder_output,
                     encoder_output2=query_output,
-                    src_mask=batch.sgn_mask,
+                    src_mask=sgn_mask,
                     src_mask2=query_mask.unsqueeze(1)
                     if query_mask is not None
                     else None,
@@ -606,6 +627,12 @@ def build_model(
     video_cos_sim = pickle.load(
         open(sim_video_cos_sim, "rb")
     )
+
+    # i3d model
+    i3d = InceptionI3d(400, in_channels=3, frequency=cfg['i3d']['frequency'], input_dir=cfg['i3d']['input_dir'])
+    i3d.cuda()
+    if cfg['i3d']['fine_tune']:
+        i3d.load_state_dict(torch.load('./i3d/models/rgb_imagenet.pt'))
     
     model: SignModel = SignModel(
         encoder=encoder,
@@ -623,7 +650,8 @@ def build_model(
         sim_loss_weight=cfg.get("sim_loss_weight", 0.0),
         sentence_embedding_mod=cfg.get("sentence_embedding_mod", "mean"),
         name_to_video_id=name_to_video_id,
-        video_cos_sim=video_cos_sim
+        video_cos_sim=video_cos_sim,
+        i3d_model=i3d,
     )
 
     if do_translation:
