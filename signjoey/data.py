@@ -78,28 +78,8 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
         else:
             return text.split()
 
-    def tokenize_features(features):
-        ft_list = torch.split(features, 1, dim=0)
-        return [ft.squeeze() for ft in ft_list]
-
-    # NOTE (Cihan): The something was necessary to match the function signature.
-    def stack_features(features, something):
-        return torch.stack([torch.stack(ft, dim=0) for ft in features], dim=0)
-
     sequence_field = data.RawField()
     signer_field = data.RawField()
-
-    sgn_field = data.Field(
-        use_vocab=False,
-        init_token=None,
-        dtype=torch.float32,
-        preprocessing=tokenize_features,
-        tokenize=lambda features: features,  # TODO (Cihan): is this necessary?
-        batch_first=True,
-        include_lengths=True,
-        postprocessing=stack_features,
-        pad_token=torch.zeros((pad_feature_size,)),
-    )
 
     gls_field = data.Field(
         pad_token=PAD_TOKEN,
@@ -120,10 +100,12 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
         include_lengths=True,
     )
 
+    sgn_length_field = data.RawField()
+
     train_data = SignTranslationDataset(
         path=train_paths,
-        fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field),
-        filter_pred=lambda x: len(vars(x)["sgn"]) <= max_sent_length
+        fields=(sequence_field, signer_field, gls_field, txt_field, sgn_length_field),
+        filter_pred=lambda x: vars(x)["sgn_len"] <= max_sent_length
         and len(vars(x)["txt"]) <= max_sent_length,
     )
 
@@ -160,7 +142,7 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
 
     dev_data = SignTranslationDataset(
         path=dev_paths,
-        fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field),
+        fields=(sequence_field, signer_field, gls_field, txt_field, sgn_length_field),
     )
     random_dev_subset = data_cfg.get("random_dev_subset", -1)
     if random_dev_subset > -1:
@@ -174,7 +156,7 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
     # check if target exists
     test_data = SignTranslationDataset(
         path=test_paths,
-        fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field),
+        fields=(sequence_field, signer_field, gls_field, txt_field, sgn_length_field),
     )
 
     gls_field.vocab = gls_vocab
@@ -237,7 +219,7 @@ def make_data_iter(
             batch_size_fn=batch_size_fn,
             train=True,
             sort_within_batch=True,
-            sort_key=lambda x: len(x.sgn),
+            sort_key=lambda x: x.sgn_len,
             shuffle=shuffle,
         )
     else:

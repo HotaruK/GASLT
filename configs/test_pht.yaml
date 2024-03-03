@@ -5,9 +5,9 @@ data:
     sgn: sign
     txt: text
     gls: gloss
-    train: phoenix14t.pami0.train
-    dev: phoenix14t.pami0.dev
-    test: phoenix14t.pami0.test
+    train: sgnlen.train.pkl.gz
+    dev: sgnlen.dev.pkl.gz
+    test: sgnlen.test.pkl.gz
     feature_size: 1024
     level: bpe
     sp_model_path: ./data/pht/bpe/de.wiki.bpe.vs25000.model
@@ -130,3 +130,5 @@ model:
         hidden_size: 512
         ff_size: 2048
         dropout: 0.5
+    i3d:
+        fine_tune: true

@@ -22,12 +22,12 @@ class SignTranslationDataset(data.Dataset):
 
     @staticmethod
     def sort_key(ex):
-        return data.interleave_keys(len(ex.sgn), len(ex.txt))
+        return data.interleave_keys(ex.sgn_len, len(ex.txt))
 
     def __init__(
         self,
         path: str,
-        fields: Tuple[RawField, RawField, Field, Field, Field],
+        fields: Tuple[RawField, RawField, Field, Field, RawField],
         **kwargs
     ):
         """Create a SignTranslationDataset given paths and fields.
@@ -44,9 +44,9 @@ class SignTranslationDataset(data.Dataset):
             fields = [
                 ("sequence", fields[0]),
                 ("signer", fields[1]),
-                ("sgn", fields[2]),
-                ("gls", fields[3]),
-                ("txt", fields[4]),
+                ("gls", fields[2]),
+                ("txt", fields[3]),
+                ("sgn_len", fields[4]),
             ]
 
         if not isinstance(path, list):
@@ -62,16 +62,14 @@ class SignTranslationDataset(data.Dataset):
                     assert samples[seq_id]["signer"] == s["signer"]
                     assert samples[seq_id]["gloss"] == s["gloss"]
                     assert samples[seq_id]["text"] == s["text"]
-                    samples[seq_id]["sign"] = torch.cat(
-                        [samples[seq_id]["sign"], s["sign"]], axis=1
-                    )
+                    samples[seq_id]["sgn_len"] += s["sgn_len"]
                 else:
                     samples[seq_id] = {
                         "name": s["name"],
                         "signer": s["signer"],
                         "gloss": s["gloss"],
                         "text": s["text"],
-                        "sign": s["sign"],
+                        "sgn_len": s["sgn_len"],
                     }
 
         examples = []
@@ -82,10 +80,9 @@ class SignTranslationDataset(data.Dataset):
                     [
                         sample["name"],
                         sample["signer"],
-                        # This is for numerical stability
-                        sample["sign"] + 1e-8,
                         sample["gloss"].strip(),
                         sample["text"].strip(),
+                        sample["sgn_len"],
                     ],
                     fields,
                 )
