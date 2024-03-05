@@ -46,7 +46,6 @@ from torch.nn.utils.rnn import pad_sequence
 from signjoey.landmark_lstm import LandmarkLSTMModel
 
 
-
 class SignModel(nn.Module):
     """
     Base Model class
@@ -110,6 +109,22 @@ class SignModel(nn.Module):
         self.sim_loss_weight = sim_loss_weight
         self.sentence_embedding_mod = sentence_embedding_mod
 
+    def combine_encoder_output_and_landmarks(self, encoder_output, landmarks):
+        # combine encoder_output and pose estimation landmark data
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # normalize landmarks
+        landmarks = (landmarks - landmarks.mean()) / landmarks.std()
+        landmarks = landmarks.to(device)
+
+        landmark_aux_data = self.landmark_encoder(landmarks)
+
+        # normalize landmark_aux_data
+        landmark_aux_data = (landmark_aux_data - landmark_aux_data.mean()) / landmark_aux_data.std()
+
+        encoder_output = encoder_output.to(device)
+        encoder_output = torch.cat((encoder_output, landmark_aux_data), dim=2)
+        return encoder_output
+
     # pylint: disable=arguments-differ
     def forward(
         self,
@@ -138,13 +153,7 @@ class SignModel(nn.Module):
         query_output = None
         query_mask = None
 
-        # combine encoder_output and pose estimation landmark data
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        landmarks = landmarks.to(device)
-        landmark_aux_data = self.landmark_encoder(landmarks)
-        encoder_output = encoder_output.to(device)
-        landmark_aux_data = landmark_aux_data.to(device)
-        encoder_output = torch.cat((encoder_output, landmark_aux_data), dim=2)
+        encoder_output = self.combine_encoder_output_and_landmarks(encoder_output=encoder_output, landmarks=landmarks)
 
         if self.query_embedding is not None:
             if self.gloss_rate < 0:
@@ -369,11 +378,10 @@ class SignModel(nn.Module):
             sgn_length=batch.sgn_lengths,
             encoder=self.encoder,
         )
+
         # combine pose estimation data
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        encoder_output = encoder_output.to(device)
-        landmarks_aux_data = self.landmark_encoder(pad_sequence(batch.landmarks, batch_first=True).float().to(device)).to(device)
-        encoder_output = torch.cat((encoder_output, landmarks_aux_data), dim=2)
+        landmarks = pad_sequence(batch.landmarks, batch_first=True).float()
+        encoder_output = self.combine_encoder_output_and_landmarks(encoder_output=encoder_output, landmarks=landmarks)
 
         query_output = None
         query_mask = None
