@@ -59,6 +59,7 @@ class SignModel(nn.Module):
         gloss_output_layer: nn.Module,
         decoder: Decoder,
         landmark_encoder: nn.Module,
+        landmark_sgn_embed: SpatialEmbeddings,
         sgn_embed: SpatialEmbeddings,
         txt_embed: Embeddings,
         gls_vocab: GlossVocabulary,
@@ -90,6 +91,7 @@ class SignModel(nn.Module):
         self.query_encoder = query_encoder
         self.decoder = decoder
         self.landmark_encoder = landmark_encoder
+        self.landmark_sgn_embed = landmark_sgn_embed
 
         self.query_embedding = query_embedding
         self.sgn_embed = sgn_embed
@@ -109,17 +111,21 @@ class SignModel(nn.Module):
         self.sim_loss_weight = sim_loss_weight
         self.sentence_embedding_mod = sentence_embedding_mod
 
-    def combine_encoder_output_and_landmarks(self, encoder_output, landmarks):
+    def combine_encoder_output_and_landmarks(self, encoder_output, landmarks, sgn_mask, sgn_length):
         # combine encoder_output and pose estimation landmark data
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # normalize landmarks
         landmarks = (landmarks - landmarks.mean()) / landmarks.std()
         landmarks = landmarks.to(device)
 
-        landmark_aux_data = self.landmark_encoder(landmarks)
+        landmark_aux_data, _ = self.landmark_encoder(
+            embed_src=self.landmark_sgn_embed(x=landmarks, mask=sgn_mask),
+            src_length=sgn_length,
+            mask=sgn_mask,
+        )
 
         # normalize landmark_aux_data
-        landmark_aux_data = (landmark_aux_data - landmark_aux_data.mean()) / landmark_aux_data.std()
+        # landmark_aux_data = (landmark_aux_data - landmark_aux_data.mean()) / landmark_aux_data.std()
 
         encoder_output = encoder_output.to(device)
         encoder_output = torch.cat((encoder_output, landmark_aux_data), dim=2)
@@ -153,7 +159,10 @@ class SignModel(nn.Module):
         query_output = None
         query_mask = None
 
-        encoder_output = self.combine_encoder_output_and_landmarks(encoder_output=encoder_output, landmarks=landmarks)
+        encoder_output = self.combine_encoder_output_and_landmarks(encoder_output=encoder_output,
+                                                                          landmarks=landmarks,
+                                                                          sgn_mask=sgn_mask,
+                                                                          sgn_length=sgn_lengths)
 
         if self.query_embedding is not None:
             if self.gloss_rate < 0:
@@ -381,7 +390,9 @@ class SignModel(nn.Module):
 
         # combine pose estimation data
         landmarks = pad_sequence(batch.landmarks, batch_first=True).float()
-        encoder_output = self.combine_encoder_output_and_landmarks(encoder_output=encoder_output, landmarks=landmarks)
+        encoder_output = self.combine_encoder_output_and_landmarks(encoder_output=encoder_output, landmarks=landmarks,
+                                                                   sgn_mask=batch.sgn_mask, sgn_length=batch.sgn_lengths
+                                                                   )
 
         query_output = None
         query_mask = None
@@ -628,7 +639,17 @@ def build_model(
     assert sim_name_to_video_id_json != "" and sim_video_cos_sim != "", "sim_name_to_video_id_json and sim_video_cos_sim must be set"
 
     # build landmark encoder
-    lm_model = LandmarkLSTMModel(**cfg["landmark_encoder"])
+    landmark_sgn_embed: SpatialEmbeddings = SpatialEmbeddings(
+        **cfg["landmark_encoder"]["embeddings"],
+        num_heads=cfg["landmark_encoder"]["num_heads"],
+        input_size=cfg["landmark_encoder"]["input_size"],
+    )
+
+    lm_model = DeformableTransformerEncoder(
+            **cfg["landmark_encoder"],
+            emb_size=landmark_sgn_embed.embedding_dim,
+            emb_dropout=cfg["landmark_encoder"]["embeddings"].get("dropout", enc_dropout),
+    )
     
     name_to_video_id = json.load(
         open(sim_name_to_video_id_json)
@@ -655,6 +676,7 @@ def build_model(
         name_to_video_id=name_to_video_id,
         video_cos_sim=video_cos_sim,
         landmark_encoder=lm_model,
+        landmark_sgn_embed=landmark_sgn_embed,
     )
 
     if do_translation:
