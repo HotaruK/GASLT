@@ -512,10 +512,10 @@ class TransformerDecoder(Decoder):
         )
 
         self.pe = PositionalEncoding(hidden_size)
-        self.layer_norm = nn.LayerNorm(hidden_size, eps=1e-6)
+        self.layer_norm = nn.LayerNorm(hidden_size+184, eps=1e-6)
 
         self.emb_dropout = nn.Dropout(p=emb_dropout)
-        self.output_layer = nn.Linear(hidden_size, vocab_size, bias=False)
+        self.output_layer = nn.Linear(hidden_size+184, vocab_size, bias=False)
 
         if freeze:
             freeze_params(self)
@@ -529,6 +529,7 @@ class TransformerDecoder(Decoder):
         unroll_steps: int = None,
         hidden: Tensor = None,
         trg_mask: Tensor = None,
+        landmarks: Tensor = None,
         **kwargs
     ):
         """
@@ -555,6 +556,15 @@ class TransformerDecoder(Decoder):
         for layer in self.layers:
             x = layer(x=x, memory=encoder_output, src_mask=src_mask, trg_mask=trg_mask)
 
+        # prepare landmark data
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        landmarks = (landmarks - landmarks.mean()) / landmarks.std()
+        landmarks = landmarks.to(device)
+        # downsampling
+        lm = landmarks.transpose(1, 2)
+        lm = nn.functional.interpolate(lm, size=x.shape[1], mode='linear', align_corners=False)
+        lm = lm.transpose(1, 2)
+        x = torch.cat((x, lm), dim=2)
         x = self.layer_norm(x)
         output = self.output_layer(x)
 

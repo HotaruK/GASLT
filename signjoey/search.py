@@ -23,6 +23,7 @@ def greedy(
     encoder_output: Tensor,
     encoder_output2: Tensor,
     encoder_hidden: Tensor,
+    landmarks: Tensor,
 ) -> (np.array, np.array):
     """
     Greedy decoding. Select the token word highest probability at each time
@@ -58,6 +59,7 @@ def greedy(
         encoder_output=encoder_output,
         encoder_output2=encoder_output2,
         encoder_hidden=encoder_hidden,
+        landmarks=landmarks,
     )
 
 
@@ -141,6 +143,7 @@ def transformer_greedy(
     encoder_output: Tensor,
     encoder_output2: Tensor,
     encoder_hidden: Tensor,
+    landmarks: Tensor,
 ) -> (np.array, None):
     """
     Special greedy function for transformer, since it works differently.
@@ -184,6 +187,7 @@ def transformer_greedy(
                 unroll_steps=None,
                 hidden=None,
                 trg_mask=trg_mask,
+                landmarks=landmarks,
             )
 
             logits = logits[:, -1]
@@ -217,6 +221,7 @@ def beam_search(
     max_output_length: int,
     alpha: float,
     embed: Embeddings,
+    landmarks: Tensor,
     n_best: int = 1,
 ) -> (np.array, np.array):
     """
@@ -310,6 +315,12 @@ def beam_search(
         "gold_score": [0] * batch_size,
     }
 
+    # prepare landmarks
+    landmarks = landmarks.to(device=encoder_output.device)
+    landmarks = tile(
+        landmarks.contiguous(), size, dim=0
+    )
+
     for step in range(max_output_length):
 
         # This decides which part of the predicted sentence we feed to the
@@ -337,6 +348,7 @@ def beam_search(
             prev_att_vector=att_vectors,
             unroll_steps=1,
             trg_mask=trg_mask,  # subsequent mask for Transformer only
+            landmarks=landmarks,
         )
 
         # For the Transformer we made predictions for all time steps up to
@@ -436,6 +448,7 @@ def beam_search(
         select_indices = batch_index.view(-1)
         select_indices = select_indices.long()
         encoder_output = encoder_output.index_select(0, select_indices)
+        landmarks = landmarks.index_select(0, select_indices)
         if encoder_output2 is not None:
             encoder_output2 = encoder_output2.index_select(0, select_indices)
         src_mask = src_mask.index_select(0, select_indices)
