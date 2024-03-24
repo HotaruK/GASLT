@@ -66,17 +66,8 @@ class SignTranslationDataset(data.Dataset):
                     samples[seq_id]["sign"] = torch.cat(
                         [samples[seq_id]["sign"], s["sign"]], axis=1
                     )
-                    samples[seq_id]["landmarks"]["pose"] = torch.cat(
-                        [samples[seq_id]["landmarks"]["pose"], s["pose"]], axis=1
-                    )
-                    samples[seq_id]["landmarks"]["right_hand"] = torch.cat(
-                        [samples[seq_id]["landmarks"]["right_hand"], s["right_hand"]], axis=1
-                    )
-                    samples[seq_id]["landmarks"]["left_hand"] = torch.cat(
-                        [samples[seq_id]["landmarks"]["left_hand"], s["left_hand"]], axis=1
-                    )
-                    samples[seq_id]["landmarks"]["face"] = torch.cat(
-                        [samples[seq_id]["landmarks"]["face"], s["face"]], axis=1
+                    samples[seq_id]["landmarks"]= torch.cat(
+                        [samples[seq_id]["landmarks"], s["landmarks"]], axis=1
                     )
                 else:
                     pass
@@ -86,23 +77,12 @@ class SignTranslationDataset(data.Dataset):
                     "gloss": s["gloss"],
                     "text": s["text"],
                     "sign": s["sign"],
-                    "landmarks": {
-                        "pose": s["pose"],
-                        "right_hand": s["right_hand"],
-                        "left_hand": s["left_hand"],
-                        "face": s["face"],
-                    },
+                    "landmarks": s["landmarks"],
                 }
 
         examples = []
         for s in samples:
             sample = samples[s]
-            landmark = torch.cat((
-                sample["landmarks"]['pose'].view(-1, 33 * 2),
-                sample["landmarks"]['right_hand'].view(-1, 21 * 2),
-                sample["landmarks"]['left_hand'].view(-1, 21 * 2),
-                sample["landmarks"]['face'].view(-1, 17 * 2),
-            ), dim=1)
             examples.append(
                 data.Example.fromlist(
                     [
@@ -112,7 +92,7 @@ class SignTranslationDataset(data.Dataset):
                         sample["sign"] + 1e-8,
                         sample["gloss"].strip(),
                         sample["text"].strip(),
-                        landmark + 1e-8,
+                        sample["landmarks"] + 1e-8,
                     ],
                     fields,
                 )

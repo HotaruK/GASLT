@@ -109,7 +109,6 @@ class SignModel(nn.Module):
     def combine_encoder_output_and_landmarks(self, encoder_output, landmarks):
         # combine encoder_output and pose estimation landmark data
         # normalize landmarks
-        landmarks = (landmarks - landmarks.mean()) / landmarks.std()
         landmarks = landmarks.to(encoder_output.device)
         encoder_output = torch.cat((encoder_output, landmarks), dim=2)
         return encoder_output

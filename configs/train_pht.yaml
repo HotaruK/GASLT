@@ -5,9 +5,9 @@ data:
     sgn: sign
     txt: text
     gls: gloss
-    train: ex2-1.train.pkl.gz
-    dev: ex2-1.dev.pkl.gz
-    test: ex2-1.test.pkl.gz
+    train: ex2-f7.train.pkl.gz
+    dev: ex2-f7.dev.pkl.gz
+    test: ex2-f7.test.pkl.gz
     feature_size: 1024
     level: bpe
     sp_model_path: ./data/pht/bpe/de.wiki.bpe.vs25000.model
@@ -127,6 +127,6 @@ model:
             dropout: 0.1
             norm_type: batch
             activation_type: softsign
-        hidden_size: 696
+        hidden_size: 1536
         ff_size: 2048
         dropout: 0.5
