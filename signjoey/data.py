@@ -61,6 +61,8 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
         test_paths = os.path.join(data_path, data_cfg["test"])
         pad_feature_size = data_cfg["feature_size"]
 
+    pad_feature_size = 1024
+
     level = data_cfg["level"]
     txt_lowercase = data_cfg["txt_lowercase"]
     max_sent_length = data_cfg["max_sent_length"]
@@ -85,6 +87,12 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
     # NOTE (Cihan): The something was necessary to match the function signature.
     def stack_features(features, something):
         return torch.stack([torch.stack(ft, dim=0) for ft in features], dim=0)
+        # from datetime import datetime
+        # now = datetime.now()
+        # date_string = now.strftime('%Y%m%d%H%M%S%f')
+        # a = torch.stack([torch.stack(ft, dim=0) for ft in features], dim=0)
+        # torch.save({'features': features, 'result': a}, f'/mnt/c/Users/Administrator/Documents/GitHub/GASLT/logs/stack-{date_string}.pt')
+        # return a
 
     sequence_field = data.RawField()
     signer_field = data.RawField()

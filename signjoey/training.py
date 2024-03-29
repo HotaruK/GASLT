@@ -70,6 +70,7 @@ class TrainManager:
             else config["data"]["feature_size"]
         )
         self.dataset_version = config["data"].get("version", "phoenix_2014_trans")
+        self.dataset_image_path = config["data"].get("dataset_image_path")
 
         # model
         self.model = model
@@ -376,7 +377,13 @@ class TrainManager:
                 processed_txt_tokens = self.total_txt_tokens
                 epoch_translation_loss = 0
 
+            debug_batch_count = 0
+            from datetime import datetime
+
             for batch in iter(train_iter):
+                now = datetime.now()
+                date_string = now.strftime('%Y/%m/%d %H:%M:%S %f')
+                print(f'{date_string} debug_batch_count:{debug_batch_count}')
                 # reactivate training
                 # create a Batch object from torchtext batch
                 batch = Batch(
@@ -471,6 +478,7 @@ class TrainManager:
                     val_res = validate_on_data(
                         model=self.model,
                         data=valid_data,
+                        dataset_image_path=self.dataset_image_path,
                         batch_size=self.eval_batch_size,
                         use_cuda=self.use_cuda,
                         batch_type=self.eval_batch_type,
@@ -700,7 +708,7 @@ class TrainManager:
                         self._store_outputs(
                             "references.dev.txt", valid_seq, val_res["txt_ref"]
                         )
-
+                debug_batch_count += 1
                 if self.stop:
                     break
             if self.stop:
@@ -751,6 +759,8 @@ class TrainManager:
 
         recognition_loss, translation_loss, sim_loss = self.model.get_loss_for_batch(
             batch=batch,
+            dataset_image_path=self.dataset_image_path,
+            use_cuda=self.use_cuda,
             recognition_loss_function=self.recognition_loss_function
             if self.do_recognition
             else None,

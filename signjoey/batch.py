@@ -75,7 +75,8 @@ class Batch:
             self.sgn = tmp_sgn
 
         self.sgn_dim = sgn_dim
-        self.sgn_mask = (self.sgn != torch.zeros(sgn_dim))[..., 0].unsqueeze(1)
+        # self.sgn_mask = (self.sgn != torch.zeros(sgn_dim))[..., 0].unsqueeze(1)
+        self.sgn_mask = None
 
         # Text
         self.txt = None
@@ -117,8 +118,8 @@ class Batch:
 
         :return:
         """
-        self.sgn = self.sgn.cuda()
-        self.sgn_mask = self.sgn_mask.cuda()
+        # self.sgn = self.sgn.cuda()
+        # self.sgn_mask = self.sgn_mask.cuda()
         self.sgn_lengths = self.sgn_lengths.cuda()
 
         if self.txt_input is not None:

@@ -41,6 +41,9 @@ from pathlib import Path
 import json
 import pickle
 
+from torchvision.models import mobilenet_v3_small
+from signjoey.mnet import get_tensor_from_images
+
 
 
 class SignModel(nn.Module):
@@ -103,15 +106,17 @@ class SignModel(nn.Module):
         self.gloss_rate = gloss_rate
         self.sim_loss_weight = sim_loss_weight
         self.sentence_embedding_mod = sentence_embedding_mod
+        self.mobilenet = mobilenet_v3_small(pretrained=True)
 
     # pylint: disable=arguments-differ
     def forward(
         self,
-        sgn: Tensor,
-        sgn_mask: Tensor,
+        names: [str],
+        dataset_image_path: str,
         sgn_lengths: Tensor,
         txt_input: Tensor,
         txt_mask: Tensor = None,
+        use_cuda: bool = True,
     ) -> (Tensor, Tensor, Tensor, Tensor):
         """
         First encodes the source sentence.
@@ -124,6 +129,7 @@ class SignModel(nn.Module):
         :param txt_mask: target mask
         :return: decoder outputs
         """
+        sgn, sgn_mask = get_tensor_from_images(names, dataset_image_path, self.mobilenet, use_cuda)
         encoder_output, encoder_hidden = self.encode(
             sgn=sgn, sgn_mask=sgn_mask, sgn_length=sgn_lengths, encoder=self.encoder
         )
@@ -178,7 +184,7 @@ class SignModel(nn.Module):
         else:
             decoder_outputs = None
 
-        return decoder_outputs, gloss_probabilities, encoder_output
+        return decoder_outputs, gloss_probabilities, encoder_output, sgn_mask
 
     def encode(
         self, sgn: Tensor, sgn_mask: Tensor, sgn_length: Tensor, encoder
@@ -236,10 +242,12 @@ class SignModel(nn.Module):
     def get_loss_for_batch(
         self,
         batch: Batch,
+        dataset_image_path: str,
         recognition_loss_function: nn.Module,
         translation_loss_function: nn.Module,
         recognition_loss_weight: float,
         translation_loss_weight: float,
+        use_cuda: bool,
     ) -> (Tensor, Tensor):
         """
         Compute non-normalized loss and number of tokens for a batch
@@ -255,18 +263,19 @@ class SignModel(nn.Module):
         # pylint: disable=unused-variable
 
         # Do a forward pass
-        decoder_outputs, gloss_probabilities, encoder_output = self.forward(
-            sgn=batch.sgn,
-            sgn_mask=batch.sgn_mask,
+        decoder_outputs, gloss_probabilities, encoder_output, sgn_mask = self.forward(
+            names=batch.sequence,
+            dataset_image_path=dataset_image_path,
             sgn_lengths=batch.sgn_lengths,
             txt_input=batch.txt_input,
             txt_mask=batch.txt_mask,
+            use_cuda=use_cuda
         )
 
         # Compute sim loss
         if self.sim_loss_weight > 0:
-            batch_size, _, seq_len = batch.sgn_mask.shape
-            sgn_mask = ~batch.sgn_mask.reshape(batch_size, seq_len, 1)
+            batch_size, _, seq_len = sgn_mask.shape
+            sgn_mask = ~sgn_mask.reshape(batch_size, seq_len, 1)
             if self.sentence_embedding_mod == "mean":
                 # fill encoder_output with zeros
                 encoder_output = encoder_output.masked_fill(sgn_mask, 0)
@@ -327,6 +336,8 @@ class SignModel(nn.Module):
     def run_batch(
         self,
         batch: Batch,
+        dataset_image_path: str,
+        use_cuda: bool,
         recognition_beam_size: int = 1,
         translation_beam_size: int = 1,
         translation_beam_alpha: float = -1,
@@ -346,9 +357,10 @@ class SignModel(nn.Module):
             stacked_attention_scores: attention scores for batch
         """
 
+        sgn, sgn_mask = get_tensor_from_images(batch.sequence, dataset_image_path, self.mobilenet, use_cuda)
         encoder_output, encoder_hidden = self.encode(
-            sgn=batch.sgn,
-            sgn_mask=batch.sgn_mask,
+            sgn=sgn,
+            sgn_mask=sgn_mask,
             sgn_length=batch.sgn_lengths,
             encoder=self.encoder,
         )
@@ -363,10 +375,10 @@ class SignModel(nn.Module):
                 query_lens < 1, query_lens.new_ones(query_lens.shape), query_lens
             )
             query_mask = get_mask_from_sequence_lengths(
-                sequence_lengths=query_lens, device=batch.sgn.device
+                sequence_lengths=query_lens, device=sgn.device
             )
             query_index = (
-                torch.arange(0, query_mask.shape[1], device=batch.sgn.device)
+                torch.arange(0, query_mask.shape[1], device=sgn.device)
                 .unsqueeze(0)
                 .expand(query_mask.shape)
             )
@@ -374,7 +386,7 @@ class SignModel(nn.Module):
             query_output = self.query_encoder(
                 trg_embed=query_vec,
                 encoder_output=encoder_output,
-                src_mask=batch.sgn_mask,
+                src_mask=sgn_mask,
             )
         if self.do_recognition:
             # Gloss Recognition Part
@@ -419,7 +431,7 @@ class SignModel(nn.Module):
                     encoder_hidden=encoder_hidden,
                     encoder_output=encoder_output,
                     encoder_output2=query_output,
-                    src_mask=batch.sgn_mask,
+                    src_mask=sgn_mask,
                     src_mask2=query_mask.unsqueeze(1)
                     if query_mask is not None
                     else None,
@@ -436,7 +448,7 @@ class SignModel(nn.Module):
                     encoder_hidden=encoder_hidden,
                     encoder_output=encoder_output,
                     encoder_output2=query_output,
-                    src_mask=batch.sgn_mask,
+                    src_mask=sgn_mask,
                     src_mask2=query_mask.unsqueeze(1)
                     if query_mask is not None
                     else None,

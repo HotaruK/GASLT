@@ -34,6 +34,7 @@ def validate_on_data(
     model: SignModel,
     data: Dataset,
     batch_size: int,
+    dataset_image_path: str,
     use_cuda: bool,
     sgn_dim: int,
     do_recognition: bool,
@@ -140,6 +141,8 @@ def validate_on_data(
                 batch_sim_loss,
             ) = model.get_loss_for_batch(
                 batch=batch,
+                dataset_image_path=dataset_image_path,
+                use_cuda=use_cuda,
                 recognition_loss_function=recognition_loss_function
                 if do_recognition
                 else None,
